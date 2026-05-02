@@ -1,0 +1,24 @@
+# --- 編譯產生的二進位與暫存檔 ---
+*.out
+*.bin
+*.hex
+*.map
+*.txt
+obj/
+Debug/
+Release/
+LPU/
+
+# --- IDE (CCS/Keil/IAR) 產生的私有設定 ---
+.launches/
+.settings/
+.config/
+.project
+.cproject
+*.bak
+*.dep
+*.pyld
+
+# --- 作業系統暫存檔 ---
+Thumbs.db
+.DS_Store

@@ -1,0 +1,83 @@
+/**
+ * These arguments were used when this file was generated. They will be automatically applied on subsequent loads
+ * via the GUI or CLI. Run CLI with '--help' for additional information on how to override these arguments.
+ * @cliArgs --device "MSPM0G110X" --part "Default" --package "LQFP-64(PM)" --product "mspm0_sdk@2.09.00.01"
+ * @v2CliArgs --device "MSPM0G1107" --package "LQFP-64(PM)" --product "mspm0_sdk@2.09.00.01"
+ * @versions {"tool":"1.26.0+4407"}
+ */
+
+/**
+ * Import the modules used in this configuration.
+ */
+const SPI           = scripting.addModule("/ti/driverlib/SPI", {}, false);
+const SPI1          = SPI.addInstance();
+const SYSCTL        = scripting.addModule("/ti/driverlib/SYSCTL");
+const UART          = scripting.addModule("/ti/driverlib/UART", {}, false);
+const UART1         = UART.addInstance();
+const ProjectConfig = scripting.addModule("/ti/project_config/ProjectConfig");
+
+/**
+ * Write custom configuration values to the imported modules.
+ */
+const divider7       = system.clockTree["PLL_PDIV"];
+divider7.divideValue = 2;
+
+const divider9       = system.clockTree["UDIV"];
+divider9.divideValue = 2;
+
+const multiplier2         = system.clockTree["PLL_QDIV"];
+multiplier2.multiplyValue = 8;
+
+const mux8       = system.clockTree["HSCLKMUX"];
+mux8.inputSelect = "HSCLKMUX_SYSPLL0";
+
+SPI1.$name                                    = "SPI_0";
+SPI1.targetBitRate                            = 6400000;
+SPI1.enabledDMAEvent2Triggers                 = "DL_SPI_DMA_INTERRUPT_TX";
+SPI1.peripheral.mosiPin.$assign               = "PA14";
+SPI1.sclkPinConfig.$name                      = "ti_driverlib_gpio_GPIOPinGeneric0";
+SPI1.mosiPinConfig.$name                      = "ti_driverlib_gpio_GPIOPinGeneric1";
+SPI1.mosiPinConfig.enableConfig               = true;
+SPI1.misoPinConfig.$name                      = "ti_driverlib_gpio_GPIOPinGeneric2";
+SPI1.cs0PinConfig.$name                       = "ti_driverlib_gpio_GPIOPinGeneric3";
+SPI1.DMA_CHANNEL_EVENT2.$name                 = "DMA_CH1";
+SPI1.DMA_CHANNEL_EVENT2.addressMode           = "b2f";
+SPI1.DMA_CHANNEL_EVENT2.srcLength             = "BYTE";
+SPI1.DMA_CHANNEL_EVENT2.dstLength             = "BYTE";
+SPI1.DMA_CHANNEL_EVENT2.configureTransferSize = true;
+SPI1.DMA_CHANNEL_EVENT2.transferSize          = 1050;
+
+const Board = scripting.addModule("/ti/driverlib/Board", {}, false);
+
+SYSCTL.clockTreeEn       = true;
+SYSCTL.SYSPLL_CLK0En     = true;
+SYSCTL.validateClkStatus = true;
+SYSCTL.enableIntDone     = true;
+SYSCTL.SYSPLL_Qdiv       = 8;
+SYSCTL.SYSPLL_CLK1En     = true;
+SYSCTL.SYSPLL_CLK2XEn    = true;
+SYSCTL.SYSPLL_CLK2XDiv   = 3;
+
+UART1.$name                    = "UART_0";
+UART1.targetBaudRate           = 115200;
+UART1.peripheral.$assign       = "UART0";
+UART1.peripheral.rxPin.$assign = "PA11";
+UART1.peripheral.txPin.$assign = "PA10";
+UART1.txPinConfig.$name        = "ti_driverlib_gpio_GPIOPinGeneric4";
+UART1.rxPinConfig.$name        = "ti_driverlib_gpio_GPIOPinGeneric5";
+
+ProjectConfig.deviceSpin = "MSPM0G1107";
+
+/**
+ * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
+ * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
+ * re-solve from scratch.
+ */
+SPI1.peripheral.$suggestSolution                    = "SPI0";
+SPI1.peripheral.sclkPin.$suggestSolution            = "PA12";
+SPI1.peripheral.misoPin.$suggestSolution            = "PA13";
+SPI1.peripheral.cs0Pin.$suggestSolution             = "PA2";
+SPI1.DMA_CHANNEL_EVENT2.peripheral.$suggestSolution = "DMA_CH0";
+Board.peripheral.$suggestSolution                   = "DEBUGSS";
+Board.peripheral.swclkPin.$suggestSolution          = "PA20";
+Board.peripheral.swdioPin.$suggestSolution          = "PA19";
