@@ -35,6 +35,7 @@ typedef enum {
     COLOR_IDX_BLUE,
     COLOR_IDX_INDIGO,
     COLOR_IDX_PURPLE,
+	COLOR_IDX_WHITE,
     COLOR_IDX_MAX
 } LED_Color_Index;
 
@@ -245,7 +246,8 @@ void mode_static_rainbow(uint16_t frame) {
         case COLOR_IDX_BLUE:   set_all(0, 0, 255);   break;
         case COLOR_IDX_INDIGO: set_all(40, 20, 90);  break;
         case COLOR_IDX_PURPLE: set_all(20, 0, 45); break;
-        default:               set_all(0, 0, 0);     break;
+		case COLOR_IDX_WHITE: set_all(255, 255, 255); break; 
+        default:               set_all(30, 0, 30);     break;
     }
 }
 
@@ -932,6 +934,322 @@ void effect_download_progress(uint16_t frame) {
     for (int i = 0; i < current_led_limit && i < LED_NUM; i++) set_pixel(i, 0, 255, 0);
 }
 
+
+// 新特效：DNA 雙螺旋脈衝
+void eff_dna_helix(uint16_t f) {
+    // 1. 先背景微弱淡出，製造殘影感
+    fade_canvas(180); 
+
+    float speed = f * 0.15f; 
+    
+    for (int i = 0; i < LED_NUM; i++) {
+        // 第一條螺旋 (科技藍)
+        // 使用 $sin$ 函數計算亮度分佈
+        float wave1 = sinf(i * 0.2f + speed);
+        if (wave1 > 0.8f) { // 只點亮波峰部分
+            set_led(i, 0, 100, 255); 
+        }
+
+        // 第二條螺旋 (生物紫) - 相位偏移 PI
+        float wave2 = sinf(i * 0.2f + speed + 3.14159f);
+        if (wave2 > 0.8f) {
+            // 如果該位置已經被第一條螺旋點亮，則混色並增亮
+            if (wave1 > 0.8f) {
+                set_led(i, 200, 200, 255); // 交會點：亮白色
+            } else {
+                set_led(i, 150, 0, 250);   // 紫色
+            }
+        }
+    }
+}
+
+void eff_singularity_pulse(uint16_t f) {
+    // 1. 製造較重的殘影感，模擬能量流動
+    fade_canvas(140); 
+
+    uint16_t center = LED_NUM / 2;
+    uint16_t cycle_len = 60; // 每個脈衝循環的長度
+    uint16_t local_f = f % cycle_len;
+
+    if (local_f < 30) {
+        // A. 收縮階段：兩端向中間靠近
+        uint16_t pos = (center * local_f) / 30;
+        set_led(pos, 0, 255, 150);              // 左側能量
+        set_led(LED_NUM - 1 - pos, 0, 255, 150); // 右側能量
+    } 
+    else if (local_f >= 30 && local_f < 35) {
+        // B. 奇點階段：中心點爆發
+        for (int i = center - 2; i <= center + 2; i++) {
+            set_led(i, 255, 255, 255); // 純白閃爍
+        }
+    } 
+    else {
+        // C. 爆發階段：能量向外擴散並變色
+        uint16_t dist = ((local_f - 35) * center) / 25;
+        if (center + dist < LED_NUM) set_led(center + dist, 255, 50, 0);
+        if (center >= dist) set_led(center - dist, 255, 50, 0);
+    }
+}
+
+void eff_bio_heartbeat(uint16_t f) {
+    static uint8_t r = 255, g = 0, b = 0;
+    static uint16_t state_timer = 0;
+    static uint8_t  step = 0;      // 0: 休息, 1: 第一跳, 2: 間隙, 3: 第二跳
+    static uint16_t rest_frames = 50; 
+    
+    // 每個 frame 跑一次計時器
+    state_timer++;
+
+    float intensity = 0.0f;
+
+    switch (step) {
+        case 0: // 休息期 (全黑)
+            if (state_timer > rest_frames) {
+                // 休息結束，隨機選色並進入第一跳
+                RGB_t c = wheel_to_rgb(simple_rand() & 255); 
+                r = c.r; g = c.g; b = c.b;
+                state_timer = 0;
+                step = 1;
+            }
+            break;
+
+        case 1: // 第一跳 (Lub - 強力爆發)
+            // 使用指數函數產生極度非線性的亮度
+            // 指數曲線: e^(-k * t^2)
+            {
+                float t = (float)state_timer / 10.0f; 
+                intensity = expf(-5.0f * t * t); // 迅速衰減
+                if (state_timer > 15) { state_timer = 0; step = 2; }
+            }
+            break;
+
+        case 2: // 短暫間隙
+            if (state_timer > 8) { state_timer = 0; step = 3; }
+            break;
+
+        case 3: // 第二跳 (Dub - 較弱的回聲)
+            {
+                float t = (float)state_timer / 12.0f;
+                intensity = 0.4f * expf(-4.0f * t * t); 
+                if (state_timer > 20) { 
+                    state_timer = 0; 
+                    step = 0; 
+                    // 關鍵：隨機化下一次休息的時間長度 (20~80 frames)
+                    rest_frames = 20 + (simple_rand() % 60); 
+                }
+            }
+            break;
+    }
+
+    // 根據計算出的非線性亮度輸出
+    for (int i = 0; i < LED_NUM; i++) { 
+        set_led(i, (uint8_t)(r * intensity), (uint8_t)(g * intensity), (uint8_t)(b * intensity)); 
+    }
+}
+
+void eff_cinematic_breath(uint16_t f) {
+    // 1. 定義總週期 (例如 900 frames，約 15 秒完成一次「亮起+熄滅」的完整呼吸)
+    const uint16_t TOTAL_FRAMES = 900; 
+    uint16_t local_f = f % TOTAL_FRAMES;
+    uint16_t cycle_count = f / TOTAL_FRAMES;
+
+    static uint8_t r = 255, g = 255, b = 255;
+    static uint16_t last_cycle = 0xFFFF;
+
+    // 2. 只有在亮度最低點 (全新循環開始) 時才更換顏色
+    if (cycle_count != last_cycle) {
+        uint8_t random_hue = (uint8_t)(simple_rand() % 256); 
+        RGB_t c = wheel_to_rgb(random_hue); 
+        r = c.r; g = c.g; b = c.b;
+        last_cycle = cycle_count;
+    }
+
+    // 3. 計算三角波進度 (t 從 0.0 -> 1.0 -> 0.0)
+    float phase_progress = (float)local_f / (float)TOTAL_FRAMES;
+    float triangle_t;
+
+    if (phase_progress < 0.5f) {
+        // 上升段：從 0.0 增加到 1.0
+        triangle_t = phase_progress * 2.0f;
+    } else {
+        // 下降段：從 1.0 減少回 0.0
+        triangle_t = (1.0f - phase_progress) * 2.0f;
+    }
+
+    // 4. 應用非線性曲線 (三次方或四次方)
+    // 這會讓亮度在低點停留更久，營造「深呼吸」的感覺
+    float intensity_factor = triangle_t * triangle_t * triangle_t; 
+    
+    // 5. 確保最低亮度為 1，最高為 255
+    uint8_t brightness = 1 + (uint8_t)(254.0f * intensity_factor);
+
+    // 6. 計算 RGB 分量並輸出給所有 WS2811 LED
+    uint8_t out_r = (uint8_t)((r * brightness) / 255);
+    uint8_t out_g = (uint8_t)((g * brightness) / 255);
+    uint8_t out_b = (uint8_t)((b * brightness) / 255);
+
+    for (int i = 0; i < LED_NUM; i++) { 
+        set_led(i, out_r, out_g, out_b); 
+    }
+} 
+
+void eff_cinematic_wave_breath(uint16_t f) {
+    // 1. 定義總週期 (1800 frames，約 30 秒)
+    const uint16_t TOTAL_FRAMES = 1800; 
+    uint16_t local_f = f % TOTAL_FRAMES;
+    uint16_t cycle_count = f / TOTAL_FRAMES;
+
+    static uint8_t r = 255, g = 255, b = 255;
+    static uint16_t last_cycle = 0xFFFF;
+
+    // 2. 換色邏輯
+    if (cycle_count != last_cycle) {
+        uint8_t random_hue = (uint8_t)(simple_rand() & 255);
+        RGB_t c = wheel_to_rgb(random_hue);
+        r = c.r; g = c.g; b = c.b;
+        last_cycle = cycle_count;
+    }
+
+    float phase = (float)local_f / (float)TOTAL_FRAMES;
+
+    // 3. 邏輯分配：
+    // 上升段: 0.0 ~ 0.4 (40%) -> 約 12 秒
+    // 波浪段: 0.4 ~ 0.6 (20%) -> 約 6 秒 (符合你要求的 5~7 秒)
+    // 下降段: 0.6 ~ 1.0 (40%) -> 約 12 秒
+
+    if (phase >= 0.4f && phase < 0.6f) {
+        // 【海洋區塊波浪段：精確控制在約 6 秒】
+        float base_brightness = 15.0f; // 進一步降低背景亮度至 15
+        float time_offset = (float)local_f * 0.06f; // 略微加快流動速度
+
+        for (int i = 0; i < LED_NUM; i++) {
+            // 產生多個循環移動的高亮區塊
+            // i * 0.2f 調整區塊密度，powf(..., 30.0f) 讓區塊邊緣更銳利
+            float wave = powf(0.5f + 0.5f * cosf(i * 0.2f - time_offset), 30.0f);
+            
+            float block_brightness = wave * 240.0f; 
+            float final_b = base_brightness + block_brightness;
+            if (final_b > 255.0f) final_b = 255.0f;
+
+            set_led(i, (uint8_t)(r * final_b / 255), (uint8_t)(g * final_b / 255), (uint8_t)(b * final_b / 255));
+        }
+    } 
+    else {
+        // 【上升段與下降段】
+        float intensity_factor;
+        
+        if (phase < 0.4f) {
+            // 上升段 (0.0 -> 0.4)
+            float t = phase / 0.4f;
+            // 使用五次方曲線讓起步「極慢」，在亮度 40 以下停留更久
+            intensity_factor = powf(t, 5.0f); 
+        } else {
+            // 下降段 (0.6 -> 1.0)
+            float t = (1.0f - phase) / 0.4f;
+            intensity_factor = t * t * t; 
+        }
+
+        uint8_t brightness = 1 + (uint8_t)(254.0f * intensity_factor); // 確保最低亮度 1
+        uint8_t out_r = (uint8_t)((r * brightness) / 255);
+        uint8_t out_g = (uint8_t)((g * brightness) / 255);
+        uint8_t out_b = (uint8_t)((b * brightness) / 255);
+
+        for (int i = 0; i < LED_NUM; i++) {
+            set_led(i, out_r, out_g, out_b);
+        }
+    }
+}
+
+ 
+void eff_random_stack(uint16_t f) {
+    // 既然 LED_NUM 是 #define 常數，這裡可以直接使用
+    static uint8_t canvas_r[LED_NUM] = {0};
+    static uint8_t canvas_g[LED_NUM] = {0};
+    static uint8_t canvas_b[LED_NUM] = {0};
+    
+    static uint16_t stacked_total = 0;
+    static float current_pos = 0.0f;
+    static uint8_t current_r, current_g, current_b;
+    static uint8_t current_size = 1;
+    static bool need_new_block = true;
+
+    // 1. 產生新的隨機塊
+    if (need_new_block) {
+        uint8_t hue = (uint8_t)(simple_rand() % 256);
+        RGB_t c = wheel_to_rgb(hue);
+        current_r = c.r; current_g = c.g; current_b = c.b;
+
+        uint16_t remaining_space = LED_NUM - stacked_total;
+        if (remaining_space == 0) {
+            // 填滿後清空畫布重置
+            for(int i = 0; i < LED_NUM; i++) { 
+                canvas_r[i] = 0; canvas_g[i] = 0; canvas_b[i] = 0; 
+            }
+            stacked_total = 0;
+            remaining_space = LED_NUM;
+        }
+        
+        // 隨機選取 1~5 顆 LED 的長度
+        current_size = 1 + (simple_rand() % 5);
+        if (current_size > remaining_space) current_size = (uint8_t)remaining_space;
+
+        current_pos = 0.0f;
+        need_new_block = false;
+    }
+
+    // 2. 移動邏輯 (每次增加 2.5 顆 LED 的距離)
+    current_pos += 2.5f; 
+
+    // 3. 碰撞與固定邏輯
+    float boundary = (float)(LED_NUM - stacked_total - current_size);
+    if (current_pos >= boundary) {
+        int start_idx = LED_NUM - stacked_total - current_size;
+        for (int i = 0; i < current_size; i++) {
+            int target = start_idx + i;
+            if (target >= 0 && target < LED_NUM) {
+                canvas_r[target] = current_r;
+                canvas_g[target] = current_g;
+                canvas_b[target] = current_b;
+            }
+        }
+        stacked_total += current_size;
+        need_new_block = true;
+    }
+
+    // 4. 渲染：結合移動塊與已固定的畫布
+    for (int i = 0; i < LED_NUM; i++) {
+        if (i >= (int)current_pos && i < (int)current_pos + current_size) {
+            set_led(i, current_r, current_g, current_b);
+        } else {
+            set_led(i, canvas_r[i], canvas_g[i], canvas_b[i]);
+        }
+    }
+} 
+
+
+void eff_glitch_sparks(uint16_t f) {
+    // 背景深色調 (深紫色)
+    uint8_t bg_r = 10, bg_g = 0, bg_b = 20;
+
+    for (int i = 0; i < LED_NUM; i++) {
+        set_led(i, bg_r, bg_g, bg_b);
+    }
+
+    // 隨機產生 2-3 個火花
+    if ((simple_rand() % 10) > 7) { 
+        int spark_pos = simple_rand() % LED_NUM;
+        uint8_t spark_bright = 150 + (simple_rand() % 105);
+        
+        // 火花不僅是白色，帶有一點點隨機的青色偏移
+        set_led(spark_pos, spark_bright - 50, spark_bright, spark_bright);
+        
+        // 增加火花的延展感 (鄰近顆粒)
+        if (spark_pos > 0) set_led(spark_pos-1, 40, 60, 60);
+        if (spark_pos < LED_NUM-1) set_led(spark_pos+1, 40, 60, 60);
+    }
+}
+
+
 // --- 5. 表格封裝與定義 ---
 void wrap_theater(uint16_t f) { effect_theater_chase(f, 255, 0, 0); }
 
@@ -942,9 +1260,18 @@ const Effect_Type EFFECT_TABLE[] = {
     {"Green",    SECONDS(2), mode_static_rainbow},
     {"Blue",     SECONDS(2), mode_static_rainbow},
     {"Indigo",   SECONDS(2), mode_static_rainbow},
-    {"Purple",   SECONDS(2), mode_static_rainbow},
+    {"Purple",   SECONDS(2), mode_static_rainbow}, 
+    {"Rainbow Static",  SECONDS(2), mode_static_rainbow},
 	
-    {"Rainbow Static",  SECONDS(10), mode_static_rainbow},
+	{"Glitch sparks", SECONDS(30), eff_glitch_sparks},
+	{"Random Stack", SECONDS(60), eff_random_stack},
+	{"Oceanic Heartbeat", SECONDS(60), eff_cinematic_wave_breath},
+	{"Super-Slow Fade", SECONDS(30), eff_cinematic_breath},
+	{"Heartbeat Bio-Pulse", SECONDS(30), eff_bio_heartbeat},
+	{"Download", SECONDS(30), effect_download_progress},
+	{"DNA Helix", SECONDS(15), eff_dna_helix},	
+	{"Singularity Pulse", SECONDS(15), eff_singularity_pulse},
+	
     {"Meteor Smooth",   SECONDS(15), eff_37_wrapper},      
     {"Bouncing Balls",  SECONDS(20), eff_39_wrapper},      
     {"Rainbow Chase",   SECONDS(15), eff_40_wrapper},      
@@ -1000,8 +1327,8 @@ const Effect_Type EFFECT_TABLE[] = {
     {"Fire",     SECONDS(60), effect_fire},
     {"Pulse",    SECONDS(60), effect_pulse},
     {"Crunch",   SECONDS(60), effect_big_crunch},
-    {"Glitch",   SECONDS(60), effect_mandela_glitch},
-    {"Download", SECONDS(30), effect_download_progress}
+    {"Glitch",   SECONDS(60), effect_mandela_glitch}
+   
 };
 
 #define TOTAL_MODES (sizeof(EFFECT_TABLE) / sizeof(Effect_Type))
